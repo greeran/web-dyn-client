@@ -8,7 +8,7 @@ import ActionButton from './components/ActionButton';
 import UploadComponent from './components/UploadComponent';
 import DownloadComponent from './components/DownloadComponent';
 
-const USE_MOCK = true; // Set to false to use real backend
+const USE_MOCK = false; // Set to false to use real backend
 
 // Remove the hardcoded MOCK_CONFIG
 

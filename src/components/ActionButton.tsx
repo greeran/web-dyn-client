@@ -5,6 +5,9 @@ interface ActionButtonProps {
   member: any;
 }
 
+// Optionally import mockFetch from App context or global if needed
+// import { mockFetch, USE_MOCK } from '../App';
+
 const ActionButton: React.FC<ActionButtonProps> = ({ member }) => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -15,12 +18,30 @@ const ActionButton: React.FC<ActionButtonProps> = ({ member }) => {
     setAck(null);
     setError(null);
     try {
-      const res = await fetch('http://localhost:8000/api/action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: member.publish_topic, payload: member.text_input ? input : undefined })
-      });
-      const data = await res.json();
+      let res;
+      const body: any = { action: member.button_name };
+      if (member.text_input) body.value = input;
+      if (typeof window !== 'undefined' && (window as any).mockFetch) {
+        res = await (window as any).mockFetch('http://localhost:8000/api/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+      } else {
+        res = await fetch('http://localhost:8000/api/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+      }
+      let data;
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        setError('Invalid response from server.');
+        setLoading(false);
+        return;
+      }
       if (data.success) setAck('Action sent!');
       else setError(data.error || 'Action failed');
     } catch (e: any) {
