@@ -1,121 +1,123 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Table, Alert, Spinner, Modal, Form } from 'react-bootstrap';
+import { Card, Button, Table, Alert, Spinner } from 'react-bootstrap';
 
 interface DownloadComponentProps {
   member: any;
 }
 
 const DownloadComponent: React.FC<DownloadComponentProps> = ({ member }) => {
-  const [showBrowser, setShowBrowser] = useState(false);
-  const [browserPath, setBrowserPath] = useState(member.root_directory || '/');
-  const [browserDirs, setBrowserDirs] = useState<string[]>([]);
-  const [browserFiles, setBrowserFiles] = useState<string[]>([]);
-  const [browserSelected, setBrowserSelected] = useState<File | null>(null);
-  const [browserLoading, setBrowserLoading] = useState(false);
-  const [browserError, setBrowserError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<any>(null);
+  const buttonName = member.button_name;
+  const [currentPath, setCurrentPath] = useState(''); // Start at root
+  const [dirs, setDirs] = useState<string[]>([]);
+  const [files, setFiles] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Simulate browsing the client file system (in real app, use input type="file" with webkitdirectory or a custom Electron/desktop solution)
-  // For web, we can only use the file picker, but we can simulate a root directory restriction by filtering after selection
-
-  // Open file picker
-  const handleOpenBrowser = () => {
-    setShowBrowser(true);
-  };
-  const handleCloseBrowser = () => {
-    setShowBrowser(false);
-    setBrowserPath(member.root_directory || '/');
-    setBrowserDirs([]);
-    setBrowserFiles([]);
-    setBrowserSelected(null);
-    setBrowserError(null);
-    setUploadResult(null);
+  const loadDirectory = (path: string) => {
+    setLoading(true);
     setError(null);
+    fetch(`http://localhost:8000/api/browse?button_name=${encodeURIComponent(buttonName)}&path=${encodeURIComponent(path)}`)
+      .then(res => res.json())
+      .then(data => {
+        setCurrentPath(data.path || '');
+        setDirs(data.directories || []);
+        setFiles(data.files || []);
+      })
+      .catch(() => {
+        setError('Failed to load directory');
+        setDirs([]);
+        setFiles([]);
+      })
+      .finally(() => setLoading(false));
   };
 
-  // Handle file selection (simulate root restriction by checking path)
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    if (file) {
-      // Optionally, check if file path starts with root_directory (not possible in browser, but can check extension)
-      const ext = file.name.substring(file.name.lastIndexOf('.'));
-      if (member.allowed_extensions && !member.allowed_extensions.includes(ext)) {
-        setError(`File type not allowed. Allowed: ${member.allowed_extensions.join(', ')}`);
-        setBrowserSelected(null);
-        return;
-      }
-      setError(null);
-      setBrowserSelected(file);
-    }
+  useEffect(() => {
+    loadDirectory(''); // Always start at root
+    // eslint-disable-next-line
+  }, [buttonName]);
+
+  const handleDirClick = (dir: string) => {
+    const newPath = currentPath ? `${currentPath.replace(/\/$/, '')}/${dir}` : dir;
+    loadDirectory(newPath);
   };
 
-  // Upload selected file to backend
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!browserSelected) {
-      setError('Please select a file to upload.');
-      return;
-    }
-    setUploading(true);
-    setError(null);
-    setUploadResult(null);
-    try {
-      const formData = new FormData();
-      formData.append('file', browserSelected as any);
-      const response = await fetch('http://localhost:8000/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      const res = await response.json();
-      setUploadResult(res);
-    } catch (err: any) {
-      setError(err.message || 'Upload failed');
-    } finally {
-      setUploading(false);
-      setShowBrowser(false);
-    }
+  const handleUp = () => {
+    if (!currentPath) return;
+    const parts = currentPath.split('/').filter(Boolean);
+    if (parts.length === 0) return;
+    parts.pop();
+    const newPath = parts.join('/');
+    loadDirectory(newPath);
+  };
+
+  const handleDownload = (filename: string) => {
+    const fullPath = currentPath ? `${currentPath.replace(/\/$/, '')}/${filename}` : filename;
+    const url = `http://localhost:8000/api/download?button_name=${encodeURIComponent(buttonName)}&path=${encodeURIComponent(fullPath)}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => alert('File downloaded! Check your browser\'s Downloads folder.'), 500);
   };
 
   return (
     <Card className="h-100 mb-3">
       <Card.Body>
         <h6>{member.button_name}</h6>
-        <Button variant="info" className="mb-3" onClick={handleOpenBrowser}>
-          <i className="fas fa-folder-open me-2"></i>Browse Local Files
-        </Button>
-        <Modal show={showBrowser} onHide={handleCloseBrowser} size="lg" centered>
-          <Modal.Header closeButton>
-            <Modal.Title>Browse Local Files</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            <Form onSubmit={handleUpload}>
-              <Form.Group className="mb-3">
-                <Form.Label>Select file to upload to backend</Form.Label>
-                <Form.Control
-                  type="file"
-                  accept={member.allowed_extensions && member.allowed_extensions.length > 0 ? member.allowed_extensions.join(',') : undefined}
-                  onChange={handleFileChange}
-                  disabled={uploading}
-                />
-              </Form.Group>
-              <Button type="submit" variant="primary" disabled={!browserSelected || uploading}>
-                {uploading ? <Spinner size="sm" animation="border" className="me-2" /> : null}
-                Upload
-              </Button>
-              {error && <Alert variant="danger" className="mt-2">{error}</Alert>}
-              {uploadResult && (
-                <Alert variant={uploadResult.success ? 'success' : 'danger'} className="mt-2">
-                  {uploadResult.success ? 'Upload successful!' : `Upload failed: ${uploadResult.error_message}`}
-                </Alert>
-              )}
-            </Form>
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={handleCloseBrowser}>Cancel</Button>
-          </Modal.Footer>
-        </Modal>
+        <div className="mb-2">
+          <strong>Current Path:</strong> {currentPath || '/'}
+          {currentPath && (
+            <Button variant="link" size="sm" onClick={handleUp} style={{ marginLeft: 10 }}>
+              <i className="fas fa-level-up-alt"></i> Up
+            </Button>
+          )}
+        </div>
+        {loading ? <Spinner animation="border" /> : (
+          <div style={{ display: 'flex', gap: 32 }}>
+            <div style={{ minWidth: 200 }}>
+              <strong>Folders</strong>
+              <ul style={{ listStyle: 'none', paddingLeft: 0 }}>
+                {dirs.map(dir => (
+                  <li key={dir}>
+                    <Button variant="link" onClick={() => handleDirClick(dir)}>
+                      <i className="fas fa-folder me-1"></i>{dir}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div style={{ minWidth: 200 }}>
+              <strong>Files</strong>
+              <Table size="sm" bordered hover>
+                <thead>
+                  <tr>
+                    <th>Filename</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {files.map(file => (
+                    <tr key={file.filename}>
+                      <td>{file.filename}</td>
+                      <td>
+                        <Button
+                          variant="success"
+                          size="sm"
+                          onClick={() => handleDownload(file.filename)}
+                        >
+                          <i className="fas fa-download"></i> Download
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          </div>
+        )}
+        {error && <Alert variant="danger" className="mt-2">{error}</Alert>}
       </Card.Body>
     </Card>
   );
