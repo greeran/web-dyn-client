@@ -83,6 +83,7 @@ function App() {
     ws.onclose = () => setBackendConnected(false);
     ws.onerror = () => setBackendConnected(false);
     ws.onmessage = (event) => {
+      console.log('WS message:', event.data); // Log all received WebSocket messages
       const msg = JSON.parse(event.data);
       if (msg.type === 'sensor_update') {
         setSensorData(prev => ({ ...prev, [msg.sensor]: msg.data }));
