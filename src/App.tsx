@@ -55,6 +55,7 @@ function App() {
       fetch('/config-exp.json')
         .then(res => res.json())
         .then(config => {
+          console.log('Using mock config from /config-exp.json');
           setTabs(config.tabs.filter((tab: any) => tab.enabled));
           setActiveTab(config.tabs.find((tab: any) => tab.enabled)?.id || '');
           setBackendConnected(true);
@@ -69,6 +70,7 @@ function App() {
     fetch('http://localhost:8000/api/config')
       .then(res => res.json())
       .then(config => {
+        console.log('Received config from backend:', config);
         setTabs(config.tabs.filter((tab: any) => tab.enabled));
         setActiveTab(config.tabs.find((tab: any) => tab.enabled)?.id || '');
       });

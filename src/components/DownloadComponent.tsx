@@ -50,16 +50,29 @@ const DownloadComponent: React.FC<DownloadComponentProps> = ({ member }) => {
     loadDirectory(newPath);
   };
 
-  const handleDownload = (filename: string) => {
-    const fullPath = currentPath ? `${currentPath.replace(/\/$/, '')}/${filename}` : filename;
-    const url = `http://localhost:8000/api/download?button_name=${encodeURIComponent(buttonName)}&path=${encodeURIComponent(fullPath)}`;
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => alert('File downloaded! Check your browser\'s Downloads folder.'), 500);
+  const handleDownload = async (filename: string) => {
+    // Compose the relative path for the backend
+    const relPath = currentPath ? `${currentPath.replace(/\/$/, '')}/${filename}` : filename;
+    try {
+      const res = await fetch('http://localhost:8000/api/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ button_name: buttonName, filename: relPath })
+      });
+      if (!res.ok) throw new Error('Failed to download file');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setTimeout(() => alert('File downloaded! Check your browser\'s Downloads folder.'), 500);
+    } catch (err: any) {
+      setError(err.message || 'Download failed');
+    }
   };
 
   return (
@@ -98,20 +111,23 @@ const DownloadComponent: React.FC<DownloadComponentProps> = ({ member }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {files.map(file => (
-                    <tr key={file.filename}>
-                      <td>{file.filename}</td>
-                      <td>
-                        <Button
-                          variant="success"
-                          size="sm"
-                          onClick={() => handleDownload(file.filename)}
-                        >
-                          <i className="fas fa-download"></i> Download
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {files.map(file => {
+                    const fname = typeof file === 'string' ? file : file.filename;
+                    return (
+                      <tr key={fname}>
+                        <td>{fname}</td>
+                        <td>
+                          <Button
+                            variant="success"
+                            size="sm"
+                            onClick={() => handleDownload(fname)}
+                          >
+                            <i className="fas fa-download"></i> Download
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </Table>
             </div>
